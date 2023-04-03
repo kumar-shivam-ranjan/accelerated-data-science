@@ -16,7 +16,9 @@ from random import randint
 def get_torch_device():
     num_devices = torch.cuda.device_count()
     if num_devices == 0:
+        logging.info("Inference will be performed on CPU.")
         return "cpu"
+    logging.info("GPU detected. Inference will be performed on GPU.")
     if num_devices == 1:
         return "cuda:0"
     else:
