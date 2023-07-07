@@ -240,8 +240,9 @@ def get_prophet_report(self):
         model_states.append(
             pd.Series(
                 m.seasonalities,
-                index=m.seasonalities.keys(),
+                index=pd.Index(m.seasonalities.keys(), dtype="object"),
                 name=self.target_columns[i],
+                dtype="object",
             )
         )
     all_model_states = pd.concat(model_states, axis=1)

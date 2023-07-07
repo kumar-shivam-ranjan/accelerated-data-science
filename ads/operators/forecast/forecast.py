@@ -219,14 +219,44 @@ class ForecastOperator:
                             columns=4,
                         ),
                         dp.Text("### First 10 Rows of Data"),
-                        dp.DataTable(self.original_user_data.head(10), caption="Start"),
+                        dp.Select(
+                            blocks=[
+                                dp.DataTable(
+                                    df.head(10).rename(
+                                        {col: self.target_column}, axis=1
+                                    ),
+                                    caption="Start",
+                                    label=col,
+                                )
+                                for col, df in self.full_data_dict.items()
+                            ]
+                        ),
                         dp.Text("----"),
                         dp.Text("### Last 10 Rows of Data"),
-                        dp.DataTable(self.original_user_data.tail(10), caption="End"),
+                        dp.Select(
+                            blocks=[
+                                dp.DataTable(
+                                    df.tail(10).rename(
+                                        {col: self.target_column}, axis=1
+                                    ),
+                                    caption="End",
+                                    label=col,
+                                )
+                                for col, df in self.full_data_dict.items()
+                            ]
+                        ),
                         dp.Text("### Data Summary Statistics"),
-                        dp.DataTable(
-                            self.original_user_data.describe(),
-                            caption="Summary Statistics",
+                        dp.Select(
+                            blocks=[
+                                dp.DataTable(
+                                    df.rename(
+                                        {col: self.target_column}, axis=1
+                                    ).describe(),
+                                    caption="Summary Statistics",
+                                    label=col,
+                                )
+                                for col, df in self.full_data_dict.items()
+                            ]
                         ),
                         label="Summary",
                     ),
@@ -292,13 +322,14 @@ class ForecastOperator:
             + train_metric_sections
             + [yaml_appendix_title, yaml_appendix]
         )
-        self.view = dp.View(*all_sections)
+        # self.view = dp.View(*all_sections)
 
+        # dp.save_report(all_sections, "___report.html", open=True)
         try:
             if self.output_dir_protocol == "file":
-                dp.save_report(self.view, self.report_file_name, open=True)
+                dp.save_report(all_sections, self.report_file_name, open=True)
             else:
-                dp.save_report(self.view, "___report.html")
+                dp.save_report(all_sections, "___report.html")
                 with open("___report.html") as f1:
                     with fsspec.open(
                         self.report_file_name, "w", **self.storage_options
@@ -306,7 +337,13 @@ class ForecastOperator:
                         f2.write(f1.read())
             print(f"Generated Report: {self.report_file_name}.")
         except Exception as e:
-            logger.debug(f"Issue generating report: {e}")
+            print(f"Issue generating report: {e}")
+            stringified_report = dp.stringify_report(all_sections)
+            with fsspec.open(
+                self.report_file_name, "w", **self.storage_options
+            ) as remote_f:
+                remote_f.write(stringified_report)
+            print(f"Generated Report: {self.report_file_name}.")
         return self
 
 
