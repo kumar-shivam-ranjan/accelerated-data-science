@@ -207,10 +207,10 @@ def operate(operator):
         output_i["Date"] = outputs[f"{col}_{cat}"]["ds"]
         output_i["Series"] = cat
         output_i[f"forecast_value"] = outputs[f"{col}_{cat}"]["yhat1"]
-        output_i[f"p{quantiles[1]*100}"] = outputs[f"{col}_{cat}"][
+        output_i[f"p{int(quantiles[1]*100)}"] = outputs[f"{col}_{cat}"][
             f"yhat1 {quantiles[1]*100}%"
         ]
-        output_i[f"p{quantiles[0]*100}"] = outputs[f"{col}_{cat}"][
+        output_i[f"p{int(quantiles[0]*100)}"] = outputs[f"{col}_{cat}"][
             f"yhat1 {quantiles[0]*100}%"
         ]
         output_col = pd.concat([output_col, output_i])

@@ -29,9 +29,11 @@ def operate(operator):
 
     # Extract the Confidence Interval Width and convert to arima's equivalent - alpha
     if operator.confidence_interval_width is None:
-        operator.confidence_interval_width = operator.model_kwargs.get("alpha", 0.90)
+        operator.confidence_interval_width = 1 - operator.model_kwargs.get(
+            "alpha", 0.05
+        )
     model_kwargs = operator.model_kwargs
-    model_kwargs["alpha"] = operator.confidence_interval_width
+    model_kwargs["alpha"] = 1 - operator.confidence_interval_width
 
     models = []
     outputs = dict()
@@ -74,7 +76,7 @@ def operate(operator):
             n_periods=n_periods,
             X=X,
             return_conf_int=True,
-            alpha=1 - operator.confidence_interval_width,
+            alpha=model_kwargs["alpha"],
         )
         yhat_clean = pd.DataFrame(yhat, index=yhat.index, columns=["yhat"])
         conf_int_clean = pd.DataFrame(
@@ -98,14 +100,17 @@ def operate(operator):
     # Merge the outputs from each model into 1 df with all outputs by target and category
     col = operator.original_target_column
     output_col = pd.DataFrame()
+    yhat_upper_percentage = int(100 - model_kwargs["alpha"] * 100 / 2)
+    yhat_lower_name = "p" + str(int(100 - yhat_upper_percentage))
+    yhat_upper_name = "p" + str(yhat_upper_percentage)
     for cat in operator.categories:
         output_i = pd.DataFrame()
 
         output_i["Date"] = outputs[f"{col}_{cat}"].index
         output_i["Series"] = cat
         output_i[f"forecast_value"] = outputs[f"{col}_{cat}"]["yhat"].values
-        output_i[f"p90"] = outputs[f"{col}_{cat}"]["yhat_upper"].values
-        output_i[f"p10"] = outputs[f"{col}_{cat}"]["yhat_lower"].values
+        output_i[yhat_upper_name] = outputs[f"{col}_{cat}"]["yhat_upper"].values
+        output_i[yhat_lower_name] = outputs[f"{col}_{cat}"]["yhat_lower"].values
         output_col = pd.concat([output_col, output_i])
     # output_col = output_col.sort_values(operator.ds_column).reset_index(drop=True)
     output_col = output_col.reset_index(drop=True)
