@@ -168,7 +168,7 @@ def operate(operator):
     output_col = pd.DataFrame()
     yhat_lower_percentage = (100 - model_kwargs["interval_width"] * 100) // 2
     yhat_upper_name = "p" + str(int(100 - yhat_lower_percentage))
-    yhat_lower_name = "p" + str(yhat_lower_percentage)
+    yhat_lower_name = "p" + str(int(yhat_lower_percentage))
     for cat in operator.categories:  # Note: add [:2] to restrict
         output_i = pd.DataFrame()
 

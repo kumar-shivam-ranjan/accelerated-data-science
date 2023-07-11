@@ -5,6 +5,7 @@
 # Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl/
 import json
 import logging
+import traceback
 import os
 import sys
 import datapane as dp
@@ -195,7 +196,7 @@ class ForecastOperator:
             )
             train_metrics = False
             other_sections = get_automlx_report(self)
-            date_column = self.datetime_column['name']
+            date_column = self.datetime_column["name"]
             ds_column_series = self.data[date_column]
             ds_forecast_col = self.outputs[0]["ds"]
             ci_col_names = ["yhat_lower", "yhat_upper"]
