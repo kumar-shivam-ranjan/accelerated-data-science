@@ -31,6 +31,7 @@ import oci
 import time
 from datetime import datetime
 import fsspec
+from sys import exit
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
@@ -130,7 +131,9 @@ class ForecastOperator:
                 )
 
         self.model_kwargs = args["spec"].get("model_kwargs", dict())
-        self.confidence_interval_width = args["spec"].get("confidence_interval_width")
+        self.confidence_interval_width = args["spec"].get(
+            "confidence_interval_width", 0.80
+        )
 
     def build_model(self):
         view = dp.View(dp.Text("# My report 3"))

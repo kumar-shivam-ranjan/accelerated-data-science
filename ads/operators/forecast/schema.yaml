@@ -229,7 +229,7 @@ spec:
     model:
       type: string
       required: false
-      default: prophet
+      default: automlx
       allowed:
         - prophet
         - arima
@@ -243,6 +243,7 @@ spec:
     confidence_interval_width:
       type: float
       required: false
+      default: 0.80
 
     tuning:
       type: dict
