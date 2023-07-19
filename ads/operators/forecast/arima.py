@@ -13,7 +13,11 @@ import datapane as dp
 from statsmodels.tsa.arima.model import ARIMA
 import pmdarima as pm
 import pandas as pd
-from ads.operators.forecast.utils import load_data_dict, _write_data
+from ads.operators.forecast.utils import (
+    load_data_dict,
+    _write_data,
+    _label_encode_dataframe,
+)
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
@@ -41,11 +45,15 @@ def operate(operator):
 
     for i, (target, df) in enumerate(full_data_dict.items()):
         # format the dataframe for this target. Dropping NA on target[df] will remove all future data
-        df[operator.ds_column] = pd.to_datetime(
-            df[operator.ds_column], format=operator.datetime_format
+        le, df_encoded = _label_encode_dataframe(
+            df, no_encode={operator.ds_column, target}
         )
-        df = df.set_index(operator.ds_column)
-        data_i = df[df[target].notna()]
+
+        df_encoded[operator.ds_column] = pd.to_datetime(
+            df_encoded[operator.ds_column], format=operator.datetime_format
+        )
+        df_clean = df_encoded.set_index(operator.ds_column)
+        data_i = df_clean[df_clean[target].notna()]
 
         # Assume that all columns passed in should be used as additional data
         additional_regressors = set(data_i.columns) - {target, operator.ds_column}
@@ -66,7 +74,7 @@ def operate(operator):
         interval_unit = operator.horizon.get("interval_unit")
         interval = int(operator.horizon.get("interval", 1))
         if len(additional_regressors):
-            X = df[df[target].isnull()].drop(target, axis=1)
+            X = df_clean[df_clean[target].isnull()].drop(target, axis=1)
         else:
             X = pd.date_range(start=start_date, periods=n_periods, freq=interval_unit)
             X = X.iloc[::interval, :]

@@ -42,7 +42,21 @@ logger.addHandler(handler)
 
 def _preprocess_prophet(data, ds_column, datetime_format):
     data["ds"] = pd.to_datetime(data[ds_column], format=datetime_format)
-    return data.drop([ds_column], axis=1)
+    if ds_column != "ds":
+        data.drop([ds_column], axis=1, inplace=True)
+    return data
+
+
+def _label_encode_dataframe(df, no_encode=set()):
+    from ads.dataset.label_encoder import DataFrameLabelEncoder
+
+    df_to_encode = df[list(set(df.columns) - no_encode)]
+    le = DataFrameLabelEncoder().fit(df_to_encode)
+    return le, le.transform(df)
+
+
+def _inverse_transform_dataframe(le, df):
+    return le.inverse_transform(df)
 
 
 def smape(actual, predicted) -> float:

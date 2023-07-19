@@ -10,7 +10,12 @@ import os
 import sys
 from ads.jobs.builders.runtimes.python_runtime import PythonRuntime
 import pandas as pd
-from ads.operators.forecast.utils import load_data_dict, _write_data
+from ads.operators.forecast.utils import (
+    load_data_dict,
+    _write_data,
+    _preprocess_prophet,
+    _label_encode_dataframe,
+)
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -43,11 +48,6 @@ def _get_np_metrics_dict(selected_metric):
         )
         return {"MAE": MeanAbsoluteError(), "RMSE": MeanSquaredError()}
     return {selected_metric: metric_translation[selected_metric]()}
-
-
-def _preprocess_prophet(data, ds_column, datetime_format):
-    data["ds"] = pd.to_datetime(data[ds_column], format=datetime_format)
-    return data.drop([ds_column], axis=1)
 
 
 def _fit_neuralprophet_model(data, params, additional_regressors, select_metric):
@@ -83,10 +83,16 @@ def operate(operator):
     model_kwargs["quantiles"] = quantiles
 
     for i, (target, df) in enumerate(full_data_dict.items()):
+        le, df_encoded = _label_encode_dataframe(
+            df, no_encode={operator.ds_column, target}
+        )
         model_kwargs_i = model_kwargs.copy()
+
         # format the dataframe for this target. Dropping NA on target[df] will remove all future data
-        df = _preprocess_prophet(df, operator.ds_column, operator.datetime_format)
-        data_i = df[df[target].notna()]
+        df_clean = _preprocess_prophet(
+            df_encoded, operator.ds_column, operator.datetime_format
+        )
+        data_i = df_clean[df_clean[target].notna()]
         data_i.rename({target: "y"}, axis=1, inplace=True)
 
         # Assume that all columns passed in should be used as additional data
@@ -124,14 +130,6 @@ def operate(operator):
                         additional_regressors=additional_regressors,
                         select_metric=operator.selected_metric,
                     )
-                    # m = NeuralProphet(**params)
-                    # m.metrics = _get_np_metrics_dict(operator.selected_metric)
-                    # for add_reg in additional_regressors:
-                    #     m = m.add_future_regressor(name=add_reg)
-                    # m.fit(df=df_train)
-
-                    # accepted_regressors_config = m.config_regressors or dict()
-                    # accepted_regressors = list(accepted_regressors_config.keys())
                     df_test = df_test[["y", "ds"] + accepted_regressors]
 
                     test_forecast_i = m.predict(df=df_test)
@@ -180,7 +178,7 @@ def operate(operator):
         )
 
         # Build future dataframe
-        future = df.reset_index(drop=True)
+        future = df_clean.reset_index(drop=True)
         future["y"] = None
         future = future[["y", "ds"] + list(accepted_regressors)]
 

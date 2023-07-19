@@ -63,7 +63,7 @@ except Exception as ex:
     logger.debug(traceback.format_exc())
     exit()
 
-AVAILABLE_MODELS = ["prophet", "neuralprophet", "arima"]
+AVAILABLE_MODELS = ["prophet", "neuralprophet", "arima", "automlx"]
 
 
 class ForecastOperator:
