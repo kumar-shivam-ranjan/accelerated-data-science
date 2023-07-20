@@ -69,6 +69,26 @@ def smape(actual, predicted) -> float:
     )
 
 
+def human_time_friendly(seconds):
+    TIME_DURATION_UNITS = (
+        ("week", 60 * 60 * 24 * 7),
+        ("day", 60 * 60 * 24),
+        ("hour", 60 * 60),
+        ("min", 60),
+        ("sec", 1),
+    )
+    if seconds == 0:
+        return "inf"
+    accumulator = []
+    for unit, div in TIME_DURATION_UNITS:
+        amount, seconds = divmod(int(seconds), div)
+        if amount > 0:
+            accumulator.append(
+                "{} {}{}".format(amount, unit, "" if amount == 1 else "s")
+            )
+    return ", ".join(accumulator)
+
+
 def _call_pandas_fsspec(pd_fn, filename, storage_options, **kwargs):
     if fsspec.utils.get_protocol(filename) == "file":
         return pd_fn(filename, **kwargs)

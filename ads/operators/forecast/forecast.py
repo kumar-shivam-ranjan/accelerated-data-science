@@ -53,6 +53,7 @@ try:
         evaluate_metrics,
         test_evaluate_metrics,
         get_forecast_plots,
+        human_time_friendly,
     )
 except Exception as ex:
     print(
@@ -216,8 +217,8 @@ class ForecastOperator:
                         ),
                         dp.Group(
                             dp.BigNumber(
-                                heading="Analysis was completed in (sec)",
-                                value=int(elapsed_time),
+                                heading="Analysis was completed in ",
+                                value=human_time_friendly(elapsed_time),
                             ),
                             dp.BigNumber(
                                 heading="Starting time index",
