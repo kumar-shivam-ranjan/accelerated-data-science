@@ -77,7 +77,8 @@ def operate(operator):
             X = df_clean[df_clean[target].isnull()].drop(target, axis=1)
         else:
             X = pd.date_range(start=start_date, periods=n_periods, freq=interval_unit)
-            X = X.iloc[::interval, :]
+            # AttributeError: 'DatetimeIndex' object has no attribute 'iloc'
+            # X = X.iloc[::interval, :]
 
         # Predict and format forecast
         yhat, conf_int = model.predict(
