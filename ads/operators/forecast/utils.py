@@ -144,9 +144,9 @@ def _clean_data(data, target_column, datetime_column, target_category_columns=No
             data_cat_clean = data_cat.drop("__Series__", axis=1).set_index(
                 datetime_column
             )
-            df = pd.concat([df, data_cat_clean], axis=1)
+            df = pd.concat([df, data_cat_clean[f"{target_column}_{cat}"]], axis=1)
             new_target_columns.append(f"{target_column}_{cat}")
-        df = df.reset_index()
+        df = df.reset_index().rename({"index": "ds"}, axis=1)
         return df.fillna(0), new_target_columns
 
     else:
@@ -254,25 +254,34 @@ def load_data_dict(operator):
     return operator
 
 
-def _build_metrics_df(y_true, y_pred, colunm_name):
+def _build_metrics_df(y_true, y_pred, column_name, weights_denominator):
     metrics = dict()
+    weight = np.sum(y_true) / weights_denominator
+    mape = mean_absolute_percentage_error(y_true=y_true, y_pred=y_pred)
+    metrics["WMAPE"] = weight * mape
     metrics["sMAPE"] = smape(actual=y_true, predicted=y_pred)
-    metrics["MAPE"] = mean_absolute_percentage_error(y_true=y_true, y_pred=y_pred)
+    metrics["MAPE"] = mape
     metrics["RMSE"] = np.sqrt(mean_squared_error(y_true=y_true, y_pred=y_pred))
     metrics["r2"] = r2_score(y_true=y_true, y_pred=y_pred)
     metrics["Explained Variance"] = explained_variance_score(
         y_true=y_true, y_pred=y_pred
     )
-    return pd.DataFrame.from_dict(metrics, orient="index", columns=[colunm_name])
+    return pd.DataFrame.from_dict(metrics, orient="index", columns=[column_name])
 
 
 def evaluate_metrics(target_columns, data, outputs, target_col="yhat"):
     total_metrics = pd.DataFrame()
+    weights_denominator = np.sum(np.abs(data[target_columns].values))
     for idx, col in enumerate(target_columns):
         y_true = np.asarray(data[col])
         y_pred = np.asarray(outputs[idx][target_col][: len(y_true)])
 
-        metrics_df = _build_metrics_df(y_true=y_true, y_pred=y_pred, colunm_name=col)
+        metrics_df = _build_metrics_df(
+            y_true=y_true,
+            y_pred=y_pred,
+            column_name=col,
+            weights_denominator=weights_denominator,
+        )
         total_metrics = pd.concat([total_metrics, metrics_df], axis=1)
     return total_metrics
 
@@ -294,36 +303,93 @@ def test_evaluate_metrics(
         target_category_columns=operator.target_category_columns,
         datetime_column="ds",
     )
+    missing_from_test_set = set(target_columns) - set(confirm_targ_columns)
+    if missing_from_test_set:
+        logger.warn(
+            f"Missing data in the test data set for the following categories: {missing_from_test_set}"
+        )
+    extra_in_test_set = set(confirm_targ_columns) - set(target_columns)
+    if extra_in_test_set:
+        logger.warn(
+            f"Extra categories found in the test data set for the following categories: {extra_in_test_set}"
+        )
+    test_target_columns = list(set(target_columns) - missing_from_test_set)
 
+    weights_denominator = np.sum(np.abs(data[test_target_columns].values))
+
+    period_metrics = None
     for idx, col in enumerate(target_columns):
-        y_true = np.asarray(data[col])
+        try:
+            y_true = np.asarray(data[col])
+        except:
+            logger.warn(
+                f"Could not find category: {col} in test dataset when building metrics. Available categories: {data.columns}"
+            )
         y_pred = np.asarray(outputs[idx][target_col][-len(y_true) :])
 
-        metrics_df = _build_metrics_df(y_true=y_true, y_pred=y_pred, colunm_name=col)
+        metrics_df = _build_metrics_df(
+            y_true=y_true,
+            y_pred=y_pred,
+            column_name=col,
+            weights_denominator=weights_denominator,
+        )
+        period_metrics_i = None
+        for j in data.index:
+            period_metrics_j = _build_metrics_df(
+                y_true=[y_true[j]],
+                y_pred=[y_pred[j]],
+                column_name=data["ds"].values[j],
+                weights_denominator=weights_denominator,
+            )
+            period_metrics_i = pd.concat([period_metrics_i, period_metrics_j], axis=1)
+        period_metrics = pd.concat([period_metrics, period_metrics_i])
+        print(f"period_metrics_i: {period_metrics_i}")
         total_metrics = pd.concat([total_metrics, metrics_df], axis=1)
+    print(f"period_metrics: {period_metrics}")
+    summary_by_period = None
+    for i in period_metrics.index.unique():
+        summary_by_period_i = dict()
+        for j in data["ds"].values:
+            summary_by_period_i[j] = np.mean(
+                period_metrics[j][period_metrics.index == i].values
+            )
+        summary_by_period = pd.concat(
+            [
+                summary_by_period,
+                pd.DataFrame.from_dict(
+                    summary_by_period_i, orient="index", columns=[i]
+                ),
+            ],
+            axis=1,
+        )
+    summary_metrics_dict = {
+        f"Mean {met}": list(summary_by_period[met].values)
+        + [np.mean(total_metrics.loc[met])]
+        for met in ["WMAPE", "sMAPE", "MAPE", "RMSE", "r2", "Explained Variance"]
+    }
+    # "Mean sMAPE": [np.mean(total_metrics.loc["sMAPE"])].append(summary_by_period["sMAPE"].values),
+    # "Median sMAPE": [np.median(total_metrics.loc["sMAPE"])].append(summary_by_period["sMAPE"].values),
+    # "Mean MAPE": [np.mean(total_metrics.loc["MAPE"])].append(summary_by_period["MAPE"].values),
+    # "Median MAPE": [np.median(total_metrics.loc["MAPE"])].append(summary_by_period["MAPE"].values),
+    # "Mean RMSE": [np.mean(total_metrics.loc["RMSE"])].append(summary_by_period["RMSE"].values),
+    # "Median RMSE": [np.median(total_metrics.loc["RMSE"])].append(summary_by_period["RMSE"].values),
+    # "Mean r2": [np.mean(total_metrics.loc["r2"])].append(summary_by_period["r2"].values),
+    # "Median r2": [np.median(total_metrics.loc["r2"])].append(summary_by_period["r2"].values),
+    # "Mean Explained Variance": [np.mean(total_metrics.loc["Explained Variance"])].append(summary_by_period["Explained Variance"].values),
+    # "Median Explained Variance":[np.median(
+    #     total_metrics.loc["Explained Variance"]
+    # )].append(summary_by_period["Explained Variance"].values),
+    # "Elapsed Time": [operator.elapsed_time for _ in range(len(data["ds"].values)+1)],
     summary_metrics = pd.DataFrame(
-        {
-            "Mean sMAPE": np.mean(total_metrics.loc["sMAPE"]),
-            "Median sMAPE": np.median(total_metrics.loc["sMAPE"]),
-            "Mean MAPE": np.mean(total_metrics.loc["MAPE"]),
-            "Median MAPE": np.median(total_metrics.loc["MAPE"]),
-            "Mean RMSE": np.mean(total_metrics.loc["RMSE"]),
-            "Median RMSE": np.median(total_metrics.loc["RMSE"]),
-            "Mean r2": np.mean(total_metrics.loc["r2"]),
-            "Median r2": np.median(total_metrics.loc["r2"]),
-            "Mean Explained Variance": np.mean(total_metrics.loc["Explained Variance"]),
-            "Median Explained Variance": np.median(
-                total_metrics.loc["Explained Variance"]
-            ),
-            "Elapsed Time": operator.elapsed_time,
-        },
-        index=["All Targets"],
+        summary_metrics_dict,
+        index=[str(x) for x in data["ds"].values] + ["All Targets"],
     )
+    summary_metrics["Elapsed Time"] = operator.elapsed_time
     return total_metrics, summary_metrics, data
 
 
 def get_forecast_plots(
-    data,
+    historical_data,
     outputs,
     target_columns,
     test_data=None,
@@ -371,25 +437,21 @@ def get_forecast_plots(
                 ]
             )
         if test_data is not None:
-            fig.add_trace(
-                go.Scatter(
-                    x=test_data["ds"],
-                    y=test_data[col],
-                    mode="markers",
-                    marker_color="green",
-                    name="Actual",
+            try:
+                fig.add_trace(
+                    go.Scatter(
+                        x=test_data["ds"],
+                        y=test_data[col],
+                        mode="markers",
+                        marker_color="green",
+                        name="Actual",
+                    )
                 )
-            )
+            except:
+                logger.warn(
+                    f"Could not find category: {col} in test dataset when building plots. Available categories: {test_data.columns}"
+                )
 
-        fig.add_trace(
-            go.Scatter(
-                x=ds_col,
-                y=data[col],
-                mode="markers",
-                marker_color="black",
-                name="Historical",
-            )
-        )
         fig.add_trace(
             go.Scatter(
                 x=ds_forecast_col,
@@ -397,6 +459,15 @@ def get_forecast_plots(
                 mode="lines+markers",
                 line_color="blue",
                 name="Forecast",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=ds_col,
+                y=historical_data[col],
+                mode="markers",
+                marker_color="black",
+                name="Historical",
             )
         )
         fig.add_vline(
