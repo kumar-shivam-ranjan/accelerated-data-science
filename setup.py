@@ -112,6 +112,8 @@ extras_require["forecast"] = extras_require["opctl"] + [
     "datapane",
     "Cerberus",
     "sktime",
+    "pytorch_forecasting==0.10.3",
+    "pytorch_lightning==1.7.0",
 ]
 
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
